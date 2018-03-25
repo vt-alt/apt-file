@@ -10,9 +10,9 @@ usage() {
   echo "  --package-only|-l        show paga names only"
   echo "  --show=arch|-A           show architectures"
   echo "  --pkglist|-q             search local pkglist database"
-  echo "  --update|-u              update automatically once per day"
   echo "  Commands:"
-  echo "    update                 update index"
+  echo "    update                 update index (default is to auto-update"
+  echo "                           once per day)"
   echo "    search|find <pattern>  search pattern in files (default)"
   echo "    list|show <pattern>    list files inpackage"
   exit
@@ -20,7 +20,7 @@ usage() {
 
 declare -a arch=($HOSTTYPE noarch)
 declare pkglist= index=
-declare update= search= list= show=
+declare update=auto search= list= show=
 declare -a args grep
 while [ $# -gt 0 ]; do
   declare opt="$1" arg="$2" ac=1
@@ -29,7 +29,6 @@ while [ $# -gt 0 ]; do
   esac
   case "$opt" in
     -i|-E|-P|-G|-F|-w|--file=*|-c) grep+=($opt) ;;
-    --update|-u) update=quiet ;;
     --show=arch|-A) show=arch ;;
     --arch*|-a) arch=("$arg"); shift $ac ;;
     --noarch|--x86_64|--i586) arch=("${opt#--}") ;;
@@ -59,7 +58,7 @@ else
 fi
 shift $ac
 
-if [[ -z "$*" && -z "$update" ]]; then
+if [[ -z "$*" && "$update" != verbose ]]; then
   usage
 fi
 
@@ -110,9 +109,6 @@ if [ $USER = root ]; then
 fi
 
 update_indexes() {
-  if [ ! -d $cache ]; then
-    mkdir -p $cache
-  fi
   if [ "$update" = verbose ]; then
     ropt=--info=progress2
   else
@@ -120,6 +116,9 @@ update_indexes() {
       return
     fi
     ropt=-q
+  fi
+  if [ ! -d $cache ]; then
+    mkdir -p $cache
   fi
   set -e # for ^C
   for a in ${arch[@]}; do
