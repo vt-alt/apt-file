@@ -1,0 +1,135 @@
+#!/bin/bash
+
+shopt -s extglob
+
+usage() {
+  [ "$1" ] && echo Unknown option "$1"
+  echo Usage: apt-file search...
+  exit
+}
+
+declare -a arch=($HOSTTYPE noarch)
+declare pkglist= index=
+declare update= search= list= show=
+declare -a args grep
+while [ $# -gt 0 ]; do
+  declare opt="$1" arg="$2" ac=1
+  case "$opt" in
+    --*=*) arg="${opt#*=}"; ac=0 ;;
+  esac
+  case "$opt" in
+    -i|-E|-P|-G|-F|-w|--file=*|-c) grep+=($opt) ;;
+    -A) show=arch ;;
+    --arch*|-a) arch=("$arg"); shift $ac ;;
+    --pkg*|--local|-q) pkglist=query ;;
+    --package-only|--packages|-l) package=only ;;
+    --help|-h) usage ;;
+    *) args+=("$opt") ;;
+  esac
+  shift
+done
+set -- "${args[@]}"
+
+ac=1
+if [[ "$1" =~ ^up(d(a(te?)?)?)?$ ]]; then update=true; shift; fi
+if [[ "$1" =~ ^s(e(a(r(ch?)?)?)?)?$ ]]; then
+  search=true
+elif [[ "$1" =~ ^f(i(nd?)?)?$ ]]; then
+  search=true
+elif [[ "$1" =~ ^l(i(st?)?)?$ ]]; then
+  list=true
+elif [[ "$1" =~ ^s(h(ow?)?)?$ ]]; then
+  list=true
+elif [[ "$1" =~ ^h(e(lp?)?)?$ ]]; then
+  usage
+else
+  ac=0
+fi
+shift $ac
+
+if [ -z "$*" ]; then
+  usage
+fi
+
+search_contents_index() {
+  apt-repo | grep -o 'file:[^ ]* [^ ]*' | sort -u | while read repo arch; do
+    [[ $repo =~ ^file: ]] || continue
+    ci=${repo#file:}/$arch/base/contents_index
+    [ ! -s $ci ] && continue
+    grep "$@" < $ci | awk '{print$2": "$1}' | grep --color "$@"
+    ret=$?
+  done
+}
+
+search_index() {
+  local sharch=
+
+  for a in ${arch[@]}; do
+    if [ "$show" = arch ]; then
+      sharch="\"$a: \""
+    fi
+    idx=$(newer_indexes $a)
+    grep "${grep[@]}" -e "$@" < $idx | if [ "$package" = only ]; then
+	awk "{print$sharch\$2}" | sort -u | grep --color "${grep[@]}" -e "$*" -e '$'
+      else
+	awk "{print$sharch\$2\": \"\$1}" | grep --color "${grep[@]}" "$@"
+    fi
+  done
+}
+
+search_pkglist() {
+  find /var/lib/apt -type f -name '*pkglist*' | while read pl; do
+    pkglist-query '[%{NAME}: %{FILENAMES}\n]' $pl | grep "${grep[@]}" -e "$@" --color
+  done
+}
+
+if [ $pkglist ]; then
+  search_pkglist "$@"
+  exit $?
+elif [ $index ]; then
+  search_contents_index "$@"
+  exit $?
+fi
+
+cache=~/.cache/apt-file
+apf_cache=/var/cache/apf
+if [ $USER = root ]; then
+  cache=$apf_cache
+fi
+
+update_indexes() {
+  if [ ! -d $cache ]; then
+    mkdir -p $cache
+  fi
+  set -e
+  for a in ${arch[@]}; do
+    of=$cache/index.$a
+    echo -n Updating $a...
+    url=rsync.altlinux.ru::ALTLinux/Sisyphus/$a/base/contents_index
+    if [ -n "$(rsync --no-motd --dry-run --out-format=%n $url $of)" ]; then
+      echo
+      (umask 022; rsync -a --no-motd --info=progress2 $url $of)
+    else
+      echo " up to date."
+    fi
+  done
+}
+if [ $update ]; then
+  update_indexes
+fi
+
+newer_indexes() {
+  local a=$1
+
+  ui=$cache/index.$a
+  si=$apf_cache/index.$a
+  if [ $ui -nt $si ]; then
+    echo $ui
+  else
+    echo $si
+  fi
+}
+
+if [ "$*" ]; then
+  search_index "$@"
+fi
