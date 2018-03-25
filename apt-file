@@ -25,7 +25,7 @@ usage() {
 
 declare -a arch=($HOSTTYPE noarch)
 declare pkglist= index=
-declare update=auto search= list= show=
+declare update=auto search= show=
 declare -a args grep
 while [ $# -gt 0 ]; do
   declare opt="$1" arg="$2" ac=1
@@ -49,13 +49,13 @@ set -- "${args[@]}"
 ac=1
 if [[ "$1" =~ ^up(d(a(te?)?)?)?$ ]]; then update=verbose; shift; fi
 if [[ "$1" =~ ^s(e(a(r(ch?)?)?)?)?$ ]]; then
-  search=search
+  search=file
 elif [[ "$1" =~ ^f(i(nd?)?)?$ ]]; then
-  search=find
+  search=file
 elif [[ "$1" =~ ^l(i(st?)?)?$ ]]; then
-  list=list
+  search=package
 elif [[ "$1" =~ ^s(h(ow?)?)?$ ]]; then
-  list=show
+  search=package
 elif [[ "$1" =~ ^h(e(lp?)?)?$ ]]; then
   usage
 else
@@ -103,8 +103,10 @@ search_index() {
       sharch="\"$a: \""
     fi
     idx=$(newer_index $a)
-    if [ "$list" ]; then
+    if [ "$search" = package ]; then
       grep "${grep[@]}" -e $'\t'"$*$"
+    elif [ "$search" = file ]; then
+      grep "${grep[@]}" -e "$*.*"$'\t'
     else
       grep "${grep[@]}" -e "$@"
     fi < $idx | if [ "$package" = only ]; then
