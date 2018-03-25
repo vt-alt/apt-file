@@ -3,8 +3,17 @@
 shopt -s extglob
 
 usage() {
-  [ "$1" ] && echo Unknown option "$1"
-  echo Usage: apt-file search...
+  [ "$1" ] && echo "Unknown option $1"
+  echo "Usage: apt-file [command] pattern"
+  echo "  -i -E -P -G -F -w        grep options"
+  echo "  --arch|-a <arch>         only search this architecture"
+  echo "  --package-only|-l        show paga names only"
+  echo "  --show=arch|-A           show architectures"
+  echo "  --pkglist|-q             search local pkglist database"
+  echo "  Commands:"
+  echo "    update                 update index"
+  echo "    search|find <pattern>  search pattern in files (default)"
+  echo "    list|show <pattern>    list files inpackage"
   exit
 }
 
@@ -19,9 +28,10 @@ while [ $# -gt 0 ]; do
   esac
   case "$opt" in
     -i|-E|-P|-G|-F|-w|--file=*|-c) grep+=($opt) ;;
-    -A) show=arch ;;
+    --show=arch|-A) show=arch ;;
     --arch*|-a) arch=("$arg"); shift $ac ;;
-    --pkg*|--local|-q) pkglist=query ;;
+    --noarch|--x86_64|--i586) arch=("${opt#--}") ;;
+    --pkglist|--local|-q) pkglist=query ;;
     --package-only|--packages|-l) package=only ;;
     --help|-h) usage ;;
     *) args+=("$opt") ;;
