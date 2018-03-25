@@ -4,17 +4,22 @@ shopt -s extglob
 
 usage() {
   [ "$1" ] && echo "Unknown option $1"
-  echo "Usage: apt-file [command] pattern"
+  echo "Usage: apt-file [command] pattern [options]"
+  echo
+  echo "Options:"
+  echo
   echo "  -i -E -P -G -F -w        grep options"
   echo "  --arch|-a <arch>         only search this architecture"
   echo "  --package-only|-l        show paga names only"
   echo "  --show=arch|-A           show architectures"
   echo "  --pkglist|-q             search local pkglist database"
-  echo "  Commands:"
+  echo
+  echo "Commands:"
+  echo
   echo "    update                 update index (default is to auto-update"
   echo "                           once per day)"
   echo "    search|find <pattern>  search pattern in files (default)"
-  echo "    list|show <pattern>    list files inpackage"
+  echo "    list|show <pattern>    list files in package"
   exit
 }
 
@@ -44,13 +49,13 @@ set -- "${args[@]}"
 ac=1
 if [[ "$1" =~ ^up(d(a(te?)?)?)?$ ]]; then update=verbose; shift; fi
 if [[ "$1" =~ ^s(e(a(r(ch?)?)?)?)?$ ]]; then
-  search=true
+  search=search
 elif [[ "$1" =~ ^f(i(nd?)?)?$ ]]; then
-  search=true
+  search=find
 elif [[ "$1" =~ ^l(i(st?)?)?$ ]]; then
-  list=true
+  list=list
 elif [[ "$1" =~ ^s(h(ow?)?)?$ ]]; then
-  list=true
+  list=show
 elif [[ "$1" =~ ^h(e(lp?)?)?$ ]]; then
   usage
 else
@@ -72,6 +77,24 @@ search_contents_index() {
   done
 }
 
+cache=~/.cache/apt-file
+apf_cache=/var/cache/apf
+if [ $USER = root ]; then
+  cache=$apf_cache
+fi
+
+newer_indexes() {
+  local a=$1
+
+  ui=$cache/index.$a
+  si=$apf_cache/index.$a
+  if [ $ui -nt $si ]; then
+    echo $ui
+  else
+    echo $si
+  fi
+}
+
 search_index() {
   local sharch=
 
@@ -80,7 +103,11 @@ search_index() {
       sharch="\"$a: \""
     fi
     idx=$(newer_indexes $a)
-    grep "${grep[@]}" -e "$@" < $idx | if [ "$package" = only ]; then
+    if [ "$list" ]; then
+      grep "${grep[@]}" -e $'\t'"$*$"
+    else
+      grep "${grep[@]}" -e "$@"
+    fi < $idx | if [ "$package" = only ]; then
 	awk "{print$sharch\$2}" | sort -u | grep --color "${grep[@]}" -e "$*" -e '$'
       else
 	awk "{print$sharch\$2\": \"\$1}" | grep --color "${grep[@]}" "$@"
@@ -100,12 +127,6 @@ if [ $pkglist ]; then
 elif [ $index ]; then
   search_contents_index "$@"
   exit $?
-fi
-
-cache=~/.cache/apt-file
-apf_cache=/var/cache/apf
-if [ $USER = root ]; then
-  cache=$apf_cache
 fi
 
 update_indexes() {
@@ -137,18 +158,6 @@ update_indexes() {
 if [ $update ]; then
   update_indexes
 fi
-
-newer_indexes() {
-  local a=$1
-
-  ui=$cache/index.$a
-  si=$apf_cache/index.$a
-  if [ $ui -nt $si ]; then
-    echo $ui
-  else
-    echo $si
-  fi
-}
 
 if [ "$*" ]; then
   search_index "$@"
