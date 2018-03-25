@@ -83,7 +83,7 @@ if [ $USER = root ]; then
   cache=$apf_cache
 fi
 
-newer_indexes() {
+newer_index() {
   local a=$1
 
   ui=$cache/index.$a
@@ -102,7 +102,7 @@ search_index() {
     if [ "$show" = arch ]; then
       sharch="\"$a: \""
     fi
-    idx=$(newer_indexes $a)
+    idx=$(newer_index $a)
     if [ "$list" ]; then
       grep "${grep[@]}" -e $'\t'"$*$"
     else
@@ -135,9 +135,9 @@ update_index() {
   if [ "$update" = verbose ]; then
     ropt=--info=progress2
   else
-    if [ -n "$(find $cache/index.$a -type f -ctime -1)" ]; then
-      return
-    fi
+    if [ -n "$(find $cache/index.$a -type f -ctime -1)" ]; then return; fi
+    # do not auto-update if root keeps updated indices
+    if [ -n "$(find $apf_cache/index.$a -type f -ctime -1)" ]; then return; fi
     ropt=-q
   fi
   set -e # for ^C
@@ -154,7 +154,7 @@ update_index() {
   set +e
 }
 
-update_indexes() {
+update_indices() {
   if [ ! -d $cache ]; then
     mkdir -p $cache
   fi
@@ -164,7 +164,7 @@ update_indexes() {
 }
 
 if [ $update ]; then
-  update_indexes
+  update_indices
 fi
 
 if [ "$*" ]; then
