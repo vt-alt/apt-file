@@ -24,7 +24,7 @@ usage() {
 }
 
 declare -a arch=($HOSTTYPE noarch)
-declare pkglist= index=
+declare pkglist=
 declare update=auto search= show= escape=
 declare -a args grep
 while [ $# -gt 0 ]; do
@@ -68,6 +68,7 @@ if [[ -z "$*" && "$update" != verbose ]]; then
   usage
 fi
 
+# legacy
 search_contents_index() {
   apt-repo | grep -o 'file:[^ ]* [^ ]*' | sort -u | while read repo arch; do
     [[ $repo =~ ^file: ]] || continue
@@ -132,9 +133,6 @@ search_pkglist() {
 
 if [ $pkglist ]; then
   search_pkglist "$@"
-  exit $?
-elif [ $index ]; then
-  search_contents_index "$@"
   exit $?
 fi
 
