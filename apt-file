@@ -129,32 +129,40 @@ elif [ $index ]; then
   exit $?
 fi
 
-update_indexes() {
+update_index() {
+  local a=$1
+
   if [ "$update" = verbose ]; then
     ropt=--info=progress2
   else
-    if [ -n "$(find $cache -type f -ctime -1)" ]; then
+    if [ -n "$(find $cache/index.$a -type f -ctime -1)" ]; then
       return
     fi
     ropt=-q
   fi
+  set -e # for ^C
+  of=$cache/index.$a
+  [ "$update" = verbose ] && echo -n Updating $a...
+  url=rsync.altlinux.ru::ALTLinux/Sisyphus/$a/base/contents_index
+  if [ -n "$(rsync --no-motd --dry-run --out-format=%n $url $of)" ]; then
+    [ "$update" = verbose ] && echo
+    (umask 022; rsync -a --no-motd $ropt $url $of)
+  else
+    [ "$update" = verbose ] && echo " is up to date."
+  fi
+  chmod 644 $of # touch ctime
+  set +e
+}
+
+update_indexes() {
   if [ ! -d $cache ]; then
     mkdir -p $cache
   fi
-  set -e # for ^C
   for a in ${arch[@]}; do
-    of=$cache/index.$a
-    [ "$update" = verbose ] && echo -n Updating $a...
-    url=rsync.altlinux.ru::ALTLinux/Sisyphus/$a/base/contents_index
-    if [ -n "$(rsync --no-motd --dry-run --out-format=%n $url $of)" ]; then
-      [ "$update" = verbose ] && echo
-      (umask 022; rsync -a --no-motd $ropt $url $of)
-    else
-      [ "$update" = verbose ] && echo " is up to date."
-    fi
+    update_index $a
   done
-  set +e
 }
+
 if [ $update ]; then
   update_indexes
 fi
