@@ -8,7 +8,7 @@ usage() {
   echo
   echo "Options:"
   echo
-  echo "  -i -E -P -G -F -w        grep options"
+  echo "  -i -w -E -P -G -F        grep options"
   echo "  --arch|-a <arch>         only search this architecture"
   echo "  --package-only|-l        show paga names only"
   echo "  --show=arch|-A           show architectures"
@@ -25,7 +25,7 @@ usage() {
 
 declare -a arch=($HOSTTYPE noarch)
 declare pkglist= index=
-declare update=auto search= show=
+declare update=auto search= show= escape=
 declare -a args grep
 while [ $# -gt 0 ]; do
   declare opt="$1" arg="$2" ac=1
@@ -33,7 +33,8 @@ while [ $# -gt 0 ]; do
     --*=*) arg="${opt#*=}"; ac=0 ;;
   esac
   case "$opt" in
-    -i|-E|-P|-G|-F|-w|--file=*|-c) grep+=($opt) ;;
+    -i|-E|-P|-G|-w|--file=*|-c) grep+=($opt) ;;
+    -F|--substring-match) escape=true ;;
     --show=arch|-A) show=arch ;;
     --arch*|-a) arch=("$arg"); shift $ac ;;
     --noarch|--x86_64|--i586) arch=("${opt#--}") ;;
@@ -97,22 +98,28 @@ newer_index() {
 
 search_index() {
   local sharch=
+  local e="$*"
 
+  if [ $escape ]; then
+    e="${e//\\/\\\\}"
+    e="${e//./\.}"
+    e="${e//\*/\*}"
+  fi
   for a in ${arch[@]}; do
     if [ "$show" = arch ]; then
       sharch="\"$a: \""
     fi
     idx=$(newer_index $a)
     if [ "$search" = package ]; then
-      grep "${grep[@]}" -e $'\t'"$*$"
+      grep "${grep[@]}" -e $'\t'"$e$"
     elif [ "$search" = file ]; then
-      grep "${grep[@]}" -e "$*.*"$'\t'
+      grep "${grep[@]}" -e "$e.*"$'\t'
     else
-      grep "${grep[@]}" -e "$@"
+      grep "${grep[@]}" -e "$e"
     fi < $idx | if [ "$package" = only ]; then
-	awk "{print$sharch\$2}" | sort -u | grep --color "${grep[@]}" -e "$*" -e '$'
+	awk "{print$sharch\$2}" | sort -u | grep --color "${grep[@]}" -e "$e" -e '$'
       else
-	awk "{print$sharch\$2\": \"\$1}" | grep --color "${grep[@]}" "$@"
+	awk "{print$sharch\$2\": \"\$1}" | grep --color "${grep[@]}" "$e"
     fi
   done
 }
