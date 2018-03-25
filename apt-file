@@ -10,6 +10,7 @@ usage() {
   echo "  --package-only|-l        show paga names only"
   echo "  --show=arch|-A           show architectures"
   echo "  --pkglist|-q             search local pkglist database"
+  echo "  --update|-u              update automatically once per day"
   echo "  Commands:"
   echo "    update                 update index"
   echo "    search|find <pattern>  search pattern in files (default)"
@@ -28,6 +29,7 @@ while [ $# -gt 0 ]; do
   esac
   case "$opt" in
     -i|-E|-P|-G|-F|-w|--file=*|-c) grep+=($opt) ;;
+    --update|-u) update=quiet ;;
     --show=arch|-A) show=arch ;;
     --arch*|-a) arch=("$arg"); shift $ac ;;
     --noarch|--x86_64|--i586) arch=("${opt#--}") ;;
@@ -41,7 +43,7 @@ done
 set -- "${args[@]}"
 
 ac=1
-if [[ "$1" =~ ^up(d(a(te?)?)?)?$ ]]; then update=true; shift; fi
+if [[ "$1" =~ ^up(d(a(te?)?)?)?$ ]]; then update=verbose; shift; fi
 if [[ "$1" =~ ^s(e(a(r(ch?)?)?)?)?$ ]]; then
   search=true
 elif [[ "$1" =~ ^f(i(nd?)?)?$ ]]; then
@@ -57,7 +59,7 @@ else
 fi
 shift $ac
 
-if [ -z "$*" ]; then
+if [[ -z "$*" && -z "$update" ]]; then
   usage
 fi
 
@@ -111,18 +113,27 @@ update_indexes() {
   if [ ! -d $cache ]; then
     mkdir -p $cache
   fi
-  set -e
+  if [ "$update" = verbose ]; then
+    ropt=--info=progress2
+  else
+    if [ -n "$(find $cache -type f -ctime -1)" ]; then
+      return
+    fi
+    ropt=-q
+  fi
+  set -e # for ^C
   for a in ${arch[@]}; do
     of=$cache/index.$a
-    echo -n Updating $a...
+    [ "$update" = verbose ] && echo -n Updating $a...
     url=rsync.altlinux.ru::ALTLinux/Sisyphus/$a/base/contents_index
     if [ -n "$(rsync --no-motd --dry-run --out-format=%n $url $of)" ]; then
-      echo
-      (umask 022; rsync -a --no-motd --info=progress2 $url $of)
+      [ "$update" = verbose ] && echo
+      (umask 022; rsync -a --no-motd $ropt $url $of)
     else
-      echo " up to date."
+      [ "$update" = verbose ] && echo " is up to date."
     fi
   done
+  set +e
 }
 if [ $update ]; then
   update_indexes
