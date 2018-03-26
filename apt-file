@@ -142,9 +142,9 @@ update_index() {
   if [ "$update" = verbose ]; then
     ropt=--info=progress2
   else
-    if [ -n "$(find $cache/index.$a -type f -ctime -1)" ]; then return; fi
+    if [[ -e $cache/index.$a && -n "$(find $cache/index.$a -type f -ctime -1)" ]]; then return; fi
     # do not auto-update if root keeps updated indices
-    if [ -n "$(find $apf_cache/index.$a -type f -ctime -1)" ]; then return; fi
+    if [[ -e $apf_cache/index.$a && -n "$(find $apf_cache/index.$a -type f -ctime -1)" ]]; then return; fi
     ropt=-q
   fi
   set -e # for ^C
