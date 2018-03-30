@@ -118,9 +118,9 @@ search_index() {
     else
       grep "${grep[@]}" -e "$e"
     fi < $idx | if [ "$package" = only ]; then
-	awk "{print$sharch\$2}" | sort -u | grep --color "${grep[@]}" -e "$e" -e '$'
+	awk -F '\t' "{print$sharch\$2}" | sort -u | grep --color "${grep[@]}" -e "$e" -e '$'
       else
-	awk "{print$sharch\$2\": \"\$1}" | grep --color "${grep[@]}" "$e"
+	awk -F '\t' "{print$sharch\$2\": \"\$1}" | grep --color "${grep[@]}" "$e"
     fi
   done
 }
@@ -153,7 +153,7 @@ update_index() {
   url=rsync.altlinux.ru::ALTLinux/Sisyphus/$a/base/contents_index
   if [ -n "$(rsync --no-motd --dry-run --out-format=%n $url $of)" ]; then
     [ "$update" = verbose ] && echo
-    (umask 022; rsync -a --no-motd $ropt $url $of)
+    (umask 022; rsync -a -z --no-motd $ropt $url $of)
   else
     [ "$update" = verbose ] && echo " is up to date."
   fi
