@@ -24,7 +24,7 @@ usage() {
 }
 
 declare -a arch=($HOSTTYPE noarch)
-declare pkglist=
+declare pkglist= pattern= package= verbose=
 declare update=auto search= show= escape=
 declare -a args grep
 while [ $# -gt 0 ]; do
@@ -33,13 +33,21 @@ while [ $# -gt 0 ]; do
     --*=*) arg="${opt#*=}"; ac=0 ;;
   esac
   case "$opt" in
-    -i|-E|-P|-G|-w|--file=*|-c) grep+=($opt) ;;
-    -F|--substring-match) escape=true ;;
+    -E|-P|-G|-w) grep+=($opt) ;;
+    --fixed-string|-F) pattern=fixedstring ;;
+    --substring-match) pattern=substring ;;
+    --regexp|-x) pattern=regexp ;;
+    --file) search=file ;;
+    --package) search=package ;;
+    --config-file|-c) APT_CONFIG=$opt ;;
+    --ignore-case|-i) grep+=(-i) ;;
+    --from-file|-f) grep+=(--file=$opt) ;;
     --show=arch|-A) show=arch ;;
     --arch*|-a) arch=("$arg"); shift $ac ;;
     --noarch|--x86_64|--i586) arch=("${opt#--}") ;;
     --pkglist|--local|-q) pkglist=query ;;
-    --package-only|--packages|-l) package=only ;;
+    --package-only|-l) package=only ;;
+    --verbose|-v) verbose=true ;;
     --help|-h) usage ;;
     *) args+=("$opt") ;;
   esac
@@ -49,14 +57,12 @@ set -- "${args[@]}"
 
 ac=1
 if [[ "$1" =~ ^up(d(a(te?)?)?)?$ ]]; then update=verbose; shift; fi
-if [[ "$1" =~ ^s(e(a(r(ch?)?)?)?)?$ ]]; then
+if [[ "$1" =~ ^s(e(a(r(ch?)?)?)?)?$ || "$1" =~ ^f(i(nd?)?)?$ ]]; then
   search=file
-elif [[ "$1" =~ ^f(i(nd?)?)?$ ]]; then
-  search=file
-elif [[ "$1" =~ ^l(i(st?)?)?$ ]]; then
+  pattern=${pattern:-substring}
+elif [[ "$1" =~ ^l(i(st?)?)?$ || "$1" =~ ^s(h(ow?)?)?$ ]]; then
   search=package
-elif [[ "$1" =~ ^s(h(ow?)?)?$ ]]; then
-  search=package
+  pattern=${pattern:-fixedstring}
 elif [[ "$1" =~ ^h(e(lp?)?)?$ ]]; then
   usage
 else
@@ -101,30 +107,38 @@ search_index() {
   local sharch=
   local e="$*"
 
-  if [ $escape ]; then
+  if [ "$pattern" != regexp ]; then
     e="${e//\\/\\\\}"
     e="${e//./\.}"
     e="${e//\*/\*}"
   fi
+  if [ "$pattern" = substring ]; then
+    m=".*$e.*"
+  else
+    m="$e"
+  fi
+  if [ "$search" = package ]; then
+    m=$'\t'"$m$"
+  elif [ "$search" = file ]; then
+    m="^$m"$'\t'
+  fi
+  if [ "$verbose" ]; then printf 'Match pattern: %q\n' "$m" >&2; fi
   for a in ${arch[@]}; do
-    aq=${a/_/%5f}
     if [ "$show" = arch ]; then
       sharch="\"$a: \""
     fi
     idx=$(newer_index $a)
     if [ "$pkglist" ]; then
-      find /var/lib/apt -type f -name '*_'$aq'_base_pkglist.classic' | while read pl; do
+      find /var/lib/apt -type f -name '*_'${a/_/%5f}'_base_pkglist.classic' | while read pl; do
+	if [ "$verbose" ]; then printf 'Query: %q\n' "$pl" >&2; fi
 	pkglist-query '[%{FILENAMES}\t%{NAME}\n]' $pl
       done
     else
+      if [ "$verbose" ]; then printf 'Grep: %q\n' "$idx" >&2; fi
       cat $idx
-    fi | if [ "$search" = package ]; then
-      grep "${grep[@]}" -e $'\t'"$e$"
-    elif [ "$search" = file ]; then
-      grep "${grep[@]}" -e "$e.*"$'\t'
-    else
-      grep "${grep[@]}" -e "$e"
-    fi | if [ "$package" = only ]; then
+    fi \
+    | grep "${grep[@]}" -e "$m" \
+    | if [ "$package" = only ]; then
 	awk -F '\t' "{print$sharch\$2}" | sort -u | grep --color "${grep[@]}" -e "$e" -e '$'
       else
 	awk -F '\t' "{print$sharch\$2\": \"\$1}" | grep --color "${grep[@]}" "$e"
