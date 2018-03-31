@@ -107,34 +107,30 @@ search_index() {
     e="${e//\*/\*}"
   fi
   for a in ${arch[@]}; do
+    aq=${a/_/%5f}
     if [ "$show" = arch ]; then
       sharch="\"$a: \""
     fi
     idx=$(newer_index $a)
-    if [ "$search" = package ]; then
+    if [ "$pkglist" ]; then
+      find /var/lib/apt -type f -name '*_'$aq'_base_pkglist.classic' | while read pl; do
+	pkglist-query '[%{FILENAMES}\t%{NAME}\n]' $pl
+      done
+    else
+      cat $idx
+    fi | if [ "$search" = package ]; then
       grep "${grep[@]}" -e $'\t'"$e$"
     elif [ "$search" = file ]; then
       grep "${grep[@]}" -e "$e.*"$'\t'
     else
       grep "${grep[@]}" -e "$e"
-    fi < $idx | if [ "$package" = only ]; then
+    fi | if [ "$package" = only ]; then
 	awk -F '\t' "{print$sharch\$2}" | sort -u | grep --color "${grep[@]}" -e "$e" -e '$'
       else
 	awk -F '\t' "{print$sharch\$2\": \"\$1}" | grep --color "${grep[@]}" "$e"
     fi
   done
 }
-
-search_pkglist() {
-  find /var/lib/apt -type f -name '*pkglist*' | while read pl; do
-    pkglist-query '[%{NAME}: %{FILENAMES}\n]' $pl | grep "${grep[@]}" -e "$@" --color
-  done
-}
-
-if [ $pkglist ]; then
-  search_pkglist "$@"
-  exit $?
-fi
 
 update_index() {
   local a=$1
