@@ -74,28 +74,11 @@ if [[ -z "$*" && "$update" != verbose ]]; then
 fi
 
 cache=~/.cache/apt-file
-apf_cache=/var/cache/apf
-if [ $USER = root ]; then
-  cache=$apf_cache
-fi
-
-newer_index() {
-  local a=$1
-
-  ui=$cache/index.$a
-  si=$apf_cache/index.$a
-  if [ $ui -nt $si ]; then
-    echo $ui
-  else
-    echo $si
-  fi
-}
 
 search_index() {
   local sharch=
   local e="$*"
 
-  echo $pattern : $search
   if [ "$pattern" != regexp ]; then
     e="${e//\\/\\\\}"
     e="${e//./\.}"
@@ -126,7 +109,7 @@ search_index() {
     if [ "$show" = arch ]; then
       sharch="\"$a: \""
     fi
-    idx=$(newer_index $a)
+    idx=$cache/index.$a
     if [ "$pkglist" ]; then
       find /var/lib/apt -type f -name '*_'${a/_/%5f}'_base_pkglist.classic' | while read pl; do
 	if [ "$verbose" ]; then printf 'Query: %q\n' "$pl" >&2; fi
@@ -153,8 +136,6 @@ update_index() {
     ropt=--info=progress2
   else
     if [[ -e $cache/index.$a && -n "$(find $cache/index.$a -type f -ctime -1)" ]]; then return; fi
-    # do not auto-update if root keeps updated indices
-    if [[ -e $apf_cache/index.$a && -n "$(find $apf_cache/index.$a -type f -ctime -1)" ]]; then return; fi
     ropt=-q
   fi
   set -e # for ^C
