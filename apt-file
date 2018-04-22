@@ -132,6 +132,9 @@ search_index() {
 update_index() {
   local a=$1
 
+  if tty --silent < /dev/stdout; then
+    update=verbose
+  fi
   if [ "$update" = verbose ]; then
     ropt=--info=progress2
   else
