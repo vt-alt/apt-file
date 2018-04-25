@@ -1,6 +1,7 @@
 #!/bin/bash
 
 shopt -s extglob
+shopt -s nullglob
 
 usage() {
   [ "$1" ] && echo "Unknown option $1"
@@ -23,6 +24,13 @@ usage() {
   exit
 }
 
+cache=~/.cache/apt-file
+
+clean() {
+  rm -v -rf $cache
+  exit
+}
+
 declare -a arch=($HOSTTYPE noarch)
 declare pkglist= pattern= package= verbose= case=
 declare update=auto search= show= fromfile=
@@ -38,7 +46,7 @@ while [ $# -gt 0 ]; do
     --regexp|-x) pattern=regexp ;;
     --file) search=file ;;
     --package) search=package ;;
-    --config-file|-c) APT_CONFIG=$opt ;;
+    --config-file|-c) APT_CONFIG=$arg ;;
     --ignore-case|-i) case=-i ;;
     --from-file|-f) fromfile=true ;;
     --show=arch|-A) show=arch ;;
@@ -47,6 +55,8 @@ while [ $# -gt 0 ]; do
     --pkglist|--local|-q) pkglist=query ;;
     --package-only|-l) package=only ;;
     --verbose|-v) verbose=true ;;
+    --repo|-R) repo=$arg; shift $ac ;;
+    --filter-suites) suite=$arg; shift $ac ;;
     --help|-h) usage ;;
     *) args+=("$opt") ;;
   esac
@@ -62,6 +72,8 @@ if [[ "$1" =~ ^s(e(a(r(ch?)?)?)?)?$ || "$1" =~ ^f(i(nd?)?)?$ ]]; then
 elif [[ "$1" =~ ^l(i(st?)?)?$ || "$1" =~ ^s(h(ow?)?)?$ ]]; then
   search=package
   pattern=${pattern:-fixedstring}
+elif [[ "$1" =~ ^c(l(e(a[rn]?)?)?)?$ ]]; then
+  clean
 elif [[ "$1" =~ ^h(e(lp?)?)?$ ]]; then
   usage
 else
@@ -69,11 +81,18 @@ else
 fi
 shift $ac
 
+#if [ -z "$repo" ]; then
+#  # determine repo
+#  sed 's/#.*//;s/\[.*\]//' /etc/apt/sources.list /etc/apt/sources.list.d/*.list \
+#    | grep ... \
+#    | awk '{print$2,$3}' \
+#    | awk -F/ '{print$1}' \
+#    | sort -u
+#fi
+
 if [[ -z "$*" && "$update" != verbose ]]; then
   usage
 fi
-
-cache=~/.cache/apt-file
 
 search_index() {
   local sharch=
@@ -132,14 +151,16 @@ search_index() {
 update_index() {
   local a=$1
 
-  if tty --silent < /dev/stdout; then
-    update=verbose
-  fi
   if [ "$update" = verbose ]; then
     ropt=--info=progress2
   else
     if [[ -e $cache/index.$a && -n "$(find $cache/index.$a -type f -ctime -1)" ]]; then return; fi
-    ropt=-q
+    if tty --silent < /dev/stdout; then
+      update=auto
+      ropt=--info=progress2
+    else
+      ropt=-q
+    fi
   fi
   set -e # for ^C
   of=$cache/index.$a
@@ -147,6 +168,7 @@ update_index() {
   url=rsync.altlinux.ru::ALTLinux/Sisyphus/$a/base/contents_index
   if [ -n "$(rsync --no-motd --dry-run --out-format=%n $url $of)" ]; then
     [ "$update" = verbose ] && echo
+    [ "$update" = auto ] && echo Updating $a...
     (umask 022; rsync -a -z --no-motd $ropt $url $of)
   else
     [ "$update" = verbose ] && echo " is up to date."
