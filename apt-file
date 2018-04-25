@@ -32,6 +32,7 @@ clean() {
 }
 
 declare -a arch=($HOSTTYPE noarch)
+repo=Sisyphus
 declare pkglist= pattern= package= verbose= case=
 declare update=auto search= show= fromfile=
 declare -a args
@@ -41,6 +42,10 @@ while [ $# -gt 0 ]; do
     --*=*) arg="${opt#*=}"; ac=0 ;;
   esac
   case "$opt" in
+    --arch*|-a) arch=(${arg//,/ }); shift $ac ;;
+    --noarch|--x86_64|--i586|--aarch64|--armh) arch=("${opt#--}") ;;
+    --repo|-r) repo=$arg; shift $ac ;;
+    --sisyphus|--[cpst][0-9]*|--[2-5].[0-4]) repo=("${opt#--}") ;;
     --fixed-string|-F) pattern=fixedstring ;;
     --substring-match) pattern=substring ;;
     --regexp|-x) pattern=regexp ;;
@@ -50,12 +55,9 @@ while [ $# -gt 0 ]; do
     --ignore-case|-i) case=-i ;;
     --from-file|-f) fromfile=true ;;
     --show=arch|-A) show=arch ;;
-    --arch*|-a) arch=("$arg"); shift $ac ;;
-    --noarch|--x86_64|--i586) arch=("${opt#--}") ;;
     --pkglist|--local|-q) pkglist=query ;;
     --package-only|-l) package=only ;;
     --verbose|-v) verbose=true ;;
-    --repo|-R) repo=$arg; shift $ac ;;
     --filter-suites) suite=$arg; shift $ac ;;
     --help|-h) usage ;;
     *) args+=("$opt") ;;
@@ -72,7 +74,7 @@ if [[ "$1" =~ ^s(e(a(r(ch?)?)?)?)?$ || "$1" =~ ^f(i(nd?)?)?$ ]]; then
 elif [[ "$1" =~ ^l(i(st?)?)?$ || "$1" =~ ^s(h(ow?)?)?$ ]]; then
   search=package
   pattern=${pattern:-fixedstring}
-elif [[ "$1" =~ ^c(l(e(a[rn]?)?)?)?$ ]]; then
+elif [[ "$1" =~ ^c(l(e(an?)?)?)?$ ]]; then
   clean
 elif [[ "$1" =~ ^h(e(lp?)?)?$ ]]; then
   usage
@@ -81,14 +83,21 @@ else
 fi
 shift $ac
 
-#if [ -z "$repo" ]; then
-#  # determine repo
-#  sed 's/#.*//;s/\[.*\]//' /etc/apt/sources.list /etc/apt/sources.list.d/*.list \
-#    | grep ... \
-#    | awk '{print$2,$3}' \
-#    | awk -F/ '{print$1}' \
-#    | sort -u
-#fi
+# determine system repo
+if [ -z "$repo" ]; then
+  # determine repo
+  r=$(sed 's/#.*//;s/\[.*\]//' /etc/apt/sources.list /etc/apt/sources.list.d/*.list \
+    | grep ... \
+    | awk '{print$2"/"$3}')
+  if [[ "$r" =~ ([^/]+)/branch ]]; then
+    repo=${BASH_REMATCH[1]}
+  fi
+fi
+if [ "$repo" != Sisyphus ]; then
+  rpath=$repo/branch
+else
+  rpath=$repo
+fi
 
 if [[ -z "$*" && "$update" != verbose ]]; then
   usage
@@ -128,7 +137,7 @@ search_index() {
     if [ "$show" = arch ]; then
       sharch="\"$a: \""
     fi
-    idx=$cache/index.$a
+    idx=$cache/$repo.$a
     if [ "$pkglist" ]; then
       find /var/lib/apt -type f -name '*_'${a/_/%5f}'_base_pkglist.classic' | while read pl; do
 	if [ "$verbose" ]; then printf 'Query: %q\n' "$pl" >&2; fi
@@ -154,7 +163,7 @@ update_index() {
   if [ "$update" = verbose ]; then
     ropt=--info=progress2
   else
-    if [[ -e $cache/index.$a && -n "$(find $cache/index.$a -type f -ctime -1)" ]]; then return; fi
+    if [[ -e $cache/$repo.$a && -n "$(find $cache/$repo.$a -type f -ctime -1)" ]]; then return; fi
     if tty --silent < /dev/stdout; then
       update=auto
       ropt=--info=progress2
@@ -163,13 +172,14 @@ update_index() {
     fi
   fi
   set -e # for ^C
-  of=$cache/index.$a
-  [ "$update" = verbose ] && echo -n Updating $a...
-  url=rsync.altlinux.ru::ALTLinux/Sisyphus/$a/base/contents_index
-  if [ -n "$(rsync --no-motd --dry-run --out-format=%n $url $of)" ]; then
+  of=$cache/$repo.$a
+  [ "$update" = verbose ] && echo -n Updating $repo/$a...
+  url=rsync.altlinux.ru::ALTLinux/$rpath/$a/base/contents_index
+  if [ -n "$(rsync --no-motd --dry-run --out-format=%n $url $of 2>/dev/null)" ]; then
     [ "$update" = verbose ] && echo
-    [ "$update" = auto ] && echo Updating $a...
+    [ "$update" = auto ] && echo Updating $repo/$a...
     (umask 022; rsync -a -z --no-motd $ropt $url $of)
+    [ "$update" = auto ] && echo -ne '\e[2A\e[J' # up,up,clear to the end of screen
   else
     [ "$update" = verbose ] && echo " is up to date."
   fi
