@@ -34,8 +34,9 @@ clean() {
 declare -a arch=($HOSTTYPE noarch)
 repo=Sisyphus
 declare pkglist= pattern= package= verbose= case=
-declare update=auto search= show= fromfile=
+declare update=auto search= show= fromfile= sort=
 declare -a args
+
 while [ $# -gt 0 ]; do
   declare opt="$1" arg="$2" ac=1
   case "$opt" in
@@ -59,6 +60,7 @@ while [ $# -gt 0 ]; do
     --package-only|-l) package=only ;;
     --verbose|-v) verbose=true ;;
     --filter-suites) suite=$arg; shift $ac ;;
+    --sort) sort=true ;;
     --help|-h) usage ;;
     *) args+=("$opt") ;;
   esac
@@ -152,9 +154,13 @@ search_index() {
 	awk -F '\t' "{print$sharch\$2}" | sort -u
       else
 	awk -F '\t' "{print$sharch\$2\": \"\$1}"
-    fi \
-    | grep --color $case "${selector[@]}" -e '$'
-  done
+    fi
+  done \
+  | if [ "$sort" ]; then
+    sort | grep --color $case "${selector[@]}" -e '$'
+  else
+    grep --color $case "${selector[@]}" -e '$'
+  fi
 }
 
 update_index() {
