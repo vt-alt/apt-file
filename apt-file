@@ -9,18 +9,29 @@ usage() {
   echo
   echo "Options:"
   echo
-  echo "  -i -w -E -P -G -F        grep options"
   echo "  --arch|-a <arch>         only search this architecture"
-  echo "  --package-only|-l        show paga names only"
-  echo "  --show=arch|-A           show architectures"
-  echo "  --pkglist|-q             search local pkglist database"
+  echo "  --noarch|--x86_64|--i586 shortcuts for above"
+  echo "  --package-only|-l        show package names only"
+  echo "  --show=arch|-A           show architecture column"
+  echo "  --pkglist|--local|-q     search local pkglist database (limited functionality)"
+  echo "  --repo|-r <p8...>        search in particular branch repo (default is your repo)"
+  echo "  --p8|--c8|--Sisyphus     shortcuts for above"
+  echo "  --fixed-string|-F        full string match (default in list/show mode)"
+  echo "  --substring-match        substring match (default in search/find mode)"
+  echo "  --regexp|-x              regular expression match (default in modeless)"
+  echo "  --file                   search in file names only (default in find mode)"
+  echo "  --package                search in package names only (default in list mode)"
+  echo "  --ignore-case|-i         ignore case in search"
+  echo "  --sort                   sort output w/o losing highlight"
   echo
   echo "Commands:"
   echo
-  echo "    update                 update index (default is to auto-update"
-  echo "                           once per day)"
-  echo "    search|find <pattern>  search pattern in files (default)"
-  echo "    list|show <pattern>    list files in package"
+  echo "    update                 update index (default is to auto-update one per week)"
+  echo "    clean                  delete downloaded indices from ~/.cache/apt-file/"
+  echo "    search|find <pattern>  search pattern in files (default is --substring-match)"
+  echo "    list|show <pattern>    list files in package (default is --fixed-string mode)"
+  echo "                           you may change above to regexp matching with -x option"
+  echo "    <pattern>              modeless search regexp in both package names and files"
   exit
 }
 
@@ -169,7 +180,7 @@ update_index() {
   if [ "$update" = verbose ]; then
     ropt=--info=progress2
   else
-    if [[ -e $cache/$repo.$a && -n "$(find $cache/$repo.$a -type f -ctime -1)" ]]; then return; fi
+    if [[ -e $cache/$repo.$a && -n "$(find $cache/$repo.$a -type f -ctime -7)" ]]; then return; fi
     if tty --silent < /dev/stdout; then
       update=auto
       ropt=--info=progress2
